@@ -1,16 +1,12 @@
 import json
-from sentence_transformers import SentenceTransformer
+
+from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
-import numpy as np
 
 print("Loading SHL catalog...")
 
 with open("data/catalog.json", encoding="utf-8") as f:
     catalog = json.load(f)
-
-print("Loading embedding model... (first run may take a minute)")
-
-model = SentenceTransformer("all-MiniLM-L6-v2")
 
 documents = []
 
@@ -24,24 +20,25 @@ for item in catalog:
     ])
     documents.append(text)
 
-print("Creating embeddings...")
+print("Building TF-IDF index...")
 
-doc_embeddings = model.encode(documents, show_progress_bar=True)
+vectorizer = TfidfVectorizer(stop_words="english")
+
+doc_vectors = vectorizer.fit_transform(documents)
 
 
-def search_catalog(query):
-    query_embedding = model.encode([query])
+def search_catalog(query, top_k=10):
 
-    similarities = cosine_similarity(
-        query_embedding,
-        doc_embeddings
-    )[0]
+    query_vector = vectorizer.transform([query])
 
-    top_indices = np.argsort(similarities)[::-1][:10]
+    similarities = cosine_similarity(query_vector, doc_vectors).flatten()
+
+    top_indices = similarities.argsort()[::-1][:top_k]
 
     recommendations = []
 
     for idx in top_indices:
+
         item = catalog[idx]
 
         recommendations.append({
@@ -54,10 +51,13 @@ def search_catalog(query):
 
 
 def find_by_name(name):
+
     matches = []
 
     for item in catalog:
+
         if name.lower() in item["name"].lower():
+
             matches.append({
                 "name": item["name"],
                 "url": item["link"],
